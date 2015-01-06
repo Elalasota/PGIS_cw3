@@ -20,7 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, QVariant
+from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, QVariant, QDateTime
 from PyQt4.QtGui import QAction, QIcon
 # Initialize Qt resources from file resources.py
 import resources_rc
@@ -31,6 +31,7 @@ import os.path
 from qgis.core import *
 import urllib, json, os, sys
 import time, calendar
+from datetime import datetime
 from sgmllib import SGMLParser
 
 class Pogoda:
@@ -189,10 +190,10 @@ class Pogoda:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-	    wektor2=QgsVectorLayer("/home/elasota/wojewodztwa/wojewodztwa.shp","Wojewodztwa2","ogr")
+	   
 		#tablica z miastami
 	    miasta=[756135, 3080165, 3083829, 3099434, 763166, 776069, 765876, 759734, 3096472, 3094802, 3090048, 3081368, 3088171, 3102014, 769250, 3093133]
-	    adres="http://api.openweathermap.org/data/2.5/group?units=metric&lang=pl& APPID= 7669678a4b5d0f3d5aa0205a2f0f2fe9&id="
+	    adres="http://api.openweathermap.org/data/2.5/group?units=metric&lang=pl&APPID= 7669678a4b5d0f3d5aa0205a2f0f2fe9&id="
 	    for miasto in miasta:
 		adres=adres+str(miasto)+","
 	    print adres
@@ -228,8 +229,8 @@ class Pogoda:
 		f.close()
             else:
 		gj=gej
-	    
-	    newCrs=QgsCoordinateReferenceSystem(2180) 
+	    #print wektor.crs().authid()
+	    newCrs=QgsCoordinateReferenceSystem(wektor.crs()) 
 	    oldCrs=QgsCoordinateReferenceSystem(4326)
 	    transformacja=QgsCoordinateTransform(oldCrs, newCrs) 
 
@@ -238,11 +239,14 @@ class Pogoda:
 	    for atr in atrybuty:
 		if wektor.dataProvider().fieldNameIndex(atr)==-1:
 			wektor.dataProvider().addAttributes([QgsField(atr, QVariant.Double)])
-	    wektor.updateFields()
+	    if wektor.dataProvider().fieldNameIndex('DataPob')==-1:
+		wektor.dataProvider().addAttributes([QgsField('DataPob', QVariant.String)])
 
+	    wektor.updateFields()
+	    
 	    slownik=gj['list']
 	    print len(slownik), 'dlugosc'
-
+	    
 	    for i in range(0, len(slownik)):
 		tmp=slownik[i]['main']['temp']
 		tmpmax=slownik[i]['main']['temp_max']
@@ -252,6 +256,10 @@ class Pogoda:
 		prw=slownik[i]['wind']['speed']
 		kw=slownik[i]['wind']['deg']
 		chm=slownik[i]['clouds']['all']
+		czas=slownik[i]['dt']
+		data2=datetime.fromtimestamp(czas).strftime('%Y-%m-%d %H:%M:%S')
+		#data2=QDateTime.fromMSecsSinceEpoch(czas*1000).toPyDateTime()
+	  	#print str(data2)
 		wartosci=[tmp, tmpmax, tmpmin, cisn, wilg, prw, kw,chm]
 		punkt=QgsPoint(slownik[i]['coord']['lon'],slownik[i]['coord']['lat'])
 	        punkt_nowy=transformacja.transform(punkt)
@@ -259,8 +267,11 @@ class Pogoda:
 			if obiekt.geometry().contains(QgsGeometry.fromPoint(punkt_nowy)):
 				for i in xrange(0, len(atrybuty)):
 					obiekt.setAttribute(atrybuty[i], wartosci[i])
+				obiekt.setAttribute('DataPob',data2)
 				wektor.updateFeature(obiekt)
+	
 	    wektor.commitChanges()
+
  	    QgsMapLayerRegistry.instance().addMapLayer(wektor)
 	    wektor.updateExtents()
             pass
